@@ -1,0 +1,39 @@
+<!-- 
+ SSE 643: Advanced Graphic Interfaces 
+ Module 5 Discussion Post
+ Chris Crawford
+ 
+ HTML file for the JavaScript program
+-->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Discussion 5</title>
+		<style>
+			body { margin: 0; }
+			#info {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				color: white;
+				background: rgba(0, 0, 0, 0.5);
+				padding: 10px;
+				font-family: Arial, sans-serif;
+				font-size: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<!-- Import OrbitControls from CDN -->
+		<script type="importmap">
+			{
+				"imports:" {
+					"orbitControls": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/OrbitControls.js"
+				}
+			}
+		</script>
+		<!-- Run JavaScript file -->
+		<script type="module" src="script.js"></script>
+	</body>
+</html>

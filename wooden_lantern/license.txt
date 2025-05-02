@@ -1,0 +1,11 @@
+Model Information:
+* title:	Wooden Lantern
+* source:	https://sketchfab.com/3d-models/wooden-lantern-0ba0e8b0f07e40d9a8d33bd21fe20ca5
+* author:	KejbisiDev (https://sketchfab.com/KejbisiDev)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Wooden Lantern" (https://sketchfab.com/3d-models/wooden-lantern-0ba0e8b0f07e40d9a8d33bd21fe20ca5) by KejbisiDev (https://sketchfab.com/KejbisiDev) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
