@@ -15,7 +15,6 @@ class GameController {
         this.loader = new GLTFLoader();
         this.flickerLights = [];
         this.hedgeTexture = null;
-        this.controller = null;
 
         this.difficulty = null;
         this.mazeLayout = null;
@@ -35,17 +34,6 @@ class GameController {
 
         // Fog setup
         this.scene.fog = new THREE.Fog(0xffffff, 0.0025, 100)
-
-        // Camera setup
-        this.camera.position.set(15, 10, 15)
-        this.controller = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controller.enableDamping = true
-        this.controller.dampingFactor = 0.05
-        this.controller.minDistance = 1
-        this.controller.maxDistance = 100
-        this.controller.minPolarAngle = Math.PI / 4
-        this.controller.maxPolarAngle = (3 * Math.PI) / 4
-        this.controller.update()
 
         // Lighting
         this.scene.add(new THREE.AmbientLight(0x272727, 1, 100, 50))
@@ -129,7 +117,6 @@ class GameController {
         // Create lanterns
         this.addLanterns(lanterns)   
         this.spawnStrawberries()
-        console.log(this.strawberries)
     }
 
     addLanterns(grid) {
@@ -262,10 +249,32 @@ class GameController {
     }
 
     playerController() {
+        this.player = new Player();
+        this.cameraOffset = new THREE.Vector3(-5, 10, 0);
 
+        this.loader.load('models/deer/scene.gltf', (gltf) => {
+            const model = gltf.scene;
+            visitChildren(model, (el) => {
+                el.castShadow = true
+                el.receiveShadow = true  
+            })
+            model.position.set(2, 0.5, 2)
+            model.scale.set(0.5, 0.5, 0.5)
+            this.scene.add(model);
+            this.player.model = model;
+        })
     }
 
     render() {
+        this.player.updatePosition();
+
+        // Camera follows player
+        const cameraTarget = this.player.position.clone().add(this.cameraOffset);
+        this.camera.position.lerp(cameraTarget, 0.1); // smooth follow
+        this.camera.lookAt(this.player.position);
+
+        this.player.model.position.copy(this.player.position);
+
         this.animateFlicker();
         this.renderer.render(this.scene, this.camera)
     }
@@ -273,13 +282,76 @@ class GameController {
 }
 
 class Player {
-    constructor() {
-        this.position = position;
-        this.velocity = velocity;
-        this.cameraMode = cameraMode;
+    constructor(startPosition = new THREE.Vector3(2, 0.5, 2)) {
+        this.position = startPosition;
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        // this.cameraMode = cameraMode;
         this.score = 0;
+
+        this.moveDirection = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false
+        };
+
         this.model = null;
+        this.targetRotation = 0;
+
+        this.initKeyboardControls();
     }
+
+    // Initialize event listeners for WASD controls.
+    initKeyboardControls() {
+        window.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'KeyW': this.moveDirection.forward = true; break;
+                case 'KeyS': this.moveDirection.backward = true; break;
+                case 'KeyA': this.moveDirection.left = true; break;
+                case 'KeyD': this.moveDirection.right = true; break;
+            }
+        });
+
+        window.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'KeyW': this.moveDirection.forward = false; break;
+                case 'KeyS': this.moveDirection.backward = false; break;
+                case 'KeyA': this.moveDirection.left = false; break;
+                case 'KeyD': this.moveDirection.right = false; break;
+            }
+        });
+    }
+
+    // Update position/orientation of model when moving
+    updatePosition() {
+        const dir = new THREE.Vector3(); // Vector for movement direction
+
+        if (this.moveDirection.forward) dir.x += 1;
+        if (this.moveDirection.backward) dir.x -= 1;
+        if (this.moveDirection.left) dir.z -= 1;
+        if (this.moveDirection.right) dir.z += 1;
+
+        // If moving, set velocity to dir and update position/rotation
+        // If not moving, set velocity to 0
+        if (dir.lengthSq() > 0) {
+            dir.normalize().multiplyScalar(0.12);
+            this.velocity.copy(dir);
+            this.position.add(this.velocity);
+            this.targetRotation = Math.atan2(dir.z, dir.x) * -1;
+        } else {
+            this.velocity.set(0, 0, 0);
+        }
+
+        // Smooth rotation for targetRotation
+        const currentY = this.model.rotation.y;
+        const delta = this.targetRotation - currentY;
+
+        // Normalize to [-PI, PI]
+        const normalized = Math.atan2(Math.sin(delta), Math.cos(delta));
+
+        this.model.rotation.y += normalized * 0.2;
+    }
+    
 }
 
 class Enemy {
@@ -287,6 +359,7 @@ class Enemy {
         this.position = position;
         this.velocity = velocity;
         this.model = null;
+        this.targetRotation = 0;
     }
 }
 
@@ -301,6 +374,7 @@ class Strawberry {
 const gameController = new GameController();
 gameController.initScene();
 gameController.createMaze();
+gameController.playerController();
 
 function animate() {
     requestAnimationFrame(animate)
