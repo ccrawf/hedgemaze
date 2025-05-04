@@ -739,3 +739,9 @@ function onResize(camera, renderer) {
     }
     window.addEventListener('resize', resizer, false)
 }
+
+window.startGame = startGame;
+window.endGame = endGame;
+window.returnToMenu = returnToMenu;
+window.howToPlay = howToPlay;
+window.closeInstructions = closeInstructions;
