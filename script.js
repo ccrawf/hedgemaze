@@ -542,7 +542,7 @@ class Player {
         // If moving, set velocity to dir and update position/rotation
         // If not moving, set velocity to 0
         if (dir.lengthSq() > 0) {
-            dir.normalize().multiplyScalar(0.12);
+            dir.normalize().multiplyScalar(0.06);
             this.velocity.copy(dir);
             this.position.add(this.velocity);
             this.targetRotation = Math.atan2(dir.z, dir.x) * -1;
