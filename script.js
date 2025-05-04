@@ -1,21 +1,23 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-
-
-const lightSettings = {
-    baseIntensity: 2
-};
 
 class GameController {
     constructor() {
+        // Scene
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.loader = new GLTFLoader();
         this.flickerLights = [];
-        this.hedgeTexture = null;
+        this.listener = new THREE.AudioListener();
 
+        // Hedges/Hitboxes
+        this.hedgeTexture = null;
+        this.playerHitbox = null;
+        this.hedgeBoxes = [];
+        this.collision = false;
+
+        // Miscellaneous
         this.difficulty = null;
         this.mazeLayout = null;
         this.strawberries = [];
@@ -23,6 +25,7 @@ class GameController {
         this.isGameOver = false;
     }
 
+    // Create scene with plane and skybox
     initScene() {
         // Renderer setup
         this.renderer.outputEncoding = THREE.sRGBEncoding
@@ -31,6 +34,9 @@ class GameController {
         onResize(this.camera, this.renderer)
         this.renderer.setSize(window.innerWidth, window.innerHeight)
         document.body.appendChild(this.renderer.domElement)
+
+        // Add AudioListener to camera
+        this.camera.add(this.listener);
 
         // Fog setup
         this.scene.fog = new THREE.Fog(0xffffff, 0.0025, 100)
@@ -73,7 +79,7 @@ class GameController {
         // Build hedge maze
         const mazeLayout = [
             ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
-            ['0','0','1','0','0','0','1','0','0','0','1','0','0','0','0','0','0','0','0','0','1'],
+            ['1','0','1','0','0','0','1','0','0','0','1','0','0','0','0','0','0','0','0','0','1'],
             ['1','0','1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','1','1','0','1'],
             ['1','0','1','0','0','0','1','0','1','0','0','0','0','0','1','0','0','0','1','0','1'],
             ['1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','1','1','1','1','0','1'],
@@ -98,7 +104,7 @@ class GameController {
 
         // Build maze
         const cellSize = 2;
-        this.buildMazeFromGrid(mazeLayout, cellSize);   
+        this.buildMazeFromGrid(mazeLayout, cellSize);  
 
         // Positions/orientations of lanterns
         const lanterns = [
@@ -144,7 +150,7 @@ class GameController {
             lantern.rotateY(rotation)
 
             // Create PointLight for lantern
-            const light = new THREE.PointLight(0xffddaa, lightSettings.baseIntensity)
+            const light = new THREE.PointLight(0xffddaa, 2)
             light.position.set(0, 5, -4.65);
             light.castShadow = true;
             light.shadow.bias = -0.005;
@@ -159,8 +165,8 @@ class GameController {
     // Function to animate flicker effects in 
     animateFlicker() {
         this.flickerLights.forEach(light => {
-            const variation = lightSettings.baseIntensity * 0.1 * Math.sin(performance.now() * 0.005 + Math.random() * 5);
-            light.intensity = lightSettings.baseIntensity + variation;
+            const variation = 2 * 0.1 * Math.sin(performance.now() * 0.005 + Math.random() * 5);
+            light.intensity = 2 + variation;
         });
     }
 
@@ -180,6 +186,9 @@ class GameController {
                 const scale = new THREE.Vector3(cellSize, wallHeight, cellSize);
                 const hedge = this.createHedgeSection(position, scale);
                 this.scene.add(hedge);
+
+                const hedgeBox = new THREE.Box3().setFromObject(hedge);
+                this.hedgeBoxes.push(hedgeBox);
                 }
             }
         }
@@ -201,7 +210,7 @@ class GameController {
 
     // Function to add strawberry 
     addStrawberry(position) {
-        const berry = new Strawberry(position);
+        const berry = new Strawberry(position, this.listener);
 
         this.loader.load('models/strawberry/scene.gltf', (gltf) => {
             const model = gltf.scene;
@@ -213,8 +222,13 @@ class GameController {
             model.scale.set(0.2, 0.2, 0.2)
             this.scene.add(model);
             berry.model = model;
+
+            // Create hitbox
+            const box = new THREE.Box3().setFromObject(model)
+            berry.hitbox = box;
+
+            this.strawberries.push(berry)
         })
-        this.strawberries.push(berry)
     }
 
     // Randomly spawn in ten strawberries
@@ -248,7 +262,8 @@ class GameController {
         }
     }
 
-    playerController() {
+    // Create player
+    addPlayer() {
         this.player = new Player();
         this.cameraOffset = new THREE.Vector3(-5, 10, 0);
 
@@ -262,21 +277,67 @@ class GameController {
             model.scale.set(0.5, 0.5, 0.5)
             this.scene.add(model);
             this.player.model = model;
+            this.initPlayerHitbox();
         })
     }
 
-    render() {
-        this.player.updatePosition();
+    // Add BoxGeometry for player's hitbox
+    initPlayerHitbox() {
+        this.playerHitbox = new THREE.Mesh(
+            new THREE.BoxGeometry(0.7, 2, 0.7),
+            new THREE.MeshBasicMaterial({ visible: false })
+        );
+        this.scene.add(this.playerHitbox);
+    }
 
-        // Camera follows player
-        const cameraTarget = this.player.position.clone().add(this.cameraOffset);
-        this.camera.position.lerp(cameraTarget, 0.1); // smooth follow
-        this.camera.lookAt(this.player.position);
+    detectCollision() {
+        const playerBox = new THREE.Box3().setFromObject(this.playerHitbox);
+    
+        // Collision with hedges
+        this.collision = false;
+        for (const hedgeBox of this.hedgeBoxes) {
+            if (playerBox.intersectsBox(hedgeBox)) {
+                this.collision = true;
+                break;
+            }
+        }
 
+        // Collision with strawberries
+        for (const strawberry of this.strawberries) {
+            if (!strawberry.isCollected && strawberry.hitbox) {        
+                if (playerBox.intersectsBox(strawberry.hitbox)) {
+                    strawberry.collect();
+                    this.score += 1;
+                }
+            }
+        }
+
+        // Collision with enemy
+    }
+
+    // Render function called in main animate
+    render() { 
+        // Check for collisions
+        this.detectCollision();
+    
+        if (!this.collision) this.player.updatePosition();
+        else {
+            // Step back slightly along reverse velocity direction
+            const stepBack = this.player.velocity.clone().normalize().multiplyScalar(0.02); // Tweak scalar as needed
+            this.player.position.sub(stepBack);
+        }
+
+        // Set model and hitbox positions to 
         this.player.model.position.copy(this.player.position);
-
+        this.playerHitbox.position.copy(this.player.position);
+    
+        // Update camera
+        const cameraTarget = this.player.position.clone().add(this.cameraOffset);
+        this.camera.position.lerp(cameraTarget, 0.1);
+        this.camera.lookAt(this.player.position);
+    
         this.animateFlicker();
-        this.renderer.render(this.scene, this.camera)
+        this.renderer.render(this.scene, this.camera);
     }
 
 }
@@ -286,7 +347,6 @@ class Player {
         this.position = startPosition;
         this.velocity = new THREE.Vector3(0, 0, 0);
         // this.cameraMode = cameraMode;
-        this.score = 0;
 
         this.moveDirection = {
             forward: false,
@@ -331,6 +391,7 @@ class Player {
         if (this.moveDirection.left) dir.z -= 1;
         if (this.moveDirection.right) dir.z += 1;
 
+
         // If moving, set velocity to dir and update position/rotation
         // If not moving, set velocity to 0
         if (dir.lengthSq() > 0) {
@@ -351,7 +412,7 @@ class Player {
 
         this.model.rotation.y += normalized * 0.2;
     }
-    
+
 }
 
 class Enemy {
@@ -364,17 +425,33 @@ class Enemy {
 }
 
 class Strawberry {
-    constructor(position) {
+    constructor(position, listener) {
         this.position = position;
         this.isCollected = false;
         this.model = null;
+        this.hitbox = null;
+
+        const audioLoader = new THREE.AudioLoader();
+        this.sound = new THREE.Audio(listener);
+        audioLoader.load('assets/pickup.mp3', (buffer) => {
+            this.sound.setBuffer(buffer);
+            this.sound.setVolume(0.5);
+        });
+    }
+
+    collect() {
+        this.isCollected = true;
+        if (this.model) {
+            this.sound.play();
+            this.model.visible = false; // Or remove it from the scene
+        }
     }
 }
 
 const gameController = new GameController();
 gameController.initScene();
 gameController.createMaze();
-gameController.playerController();
+gameController.addPlayer();
 
 function animate() {
     requestAnimationFrame(animate)
@@ -399,4 +476,4 @@ function onResize(camera, renderer) {
       renderer.setSize(window.innerWidth, window.innerHeight)
     }
     window.addEventListener('resize', resizer, false)
-  }
+}
