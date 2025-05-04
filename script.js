@@ -697,8 +697,6 @@ window.endGame = function(win = true) {
     const message = win ? 'YOU WIN!' : 'GAME OVER';
     document.getElementById('endMessage').textContent = message;
     document.getElementById('endScreen').style.display = 'flex';
-    document.getElementById("scoreDisplay").style.display = "none";
-    document.getElementById("timeDisplay").style.display = "none";
 };
   
 // Reload page after pressing Return To Menu button after game ends
