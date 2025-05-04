@@ -23,9 +23,105 @@
 				font-family: Arial, sans-serif;
 				font-size: 14px;
 			}
+			#mainMenu {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: radial-gradient(circle, #a3d2a3 0%, #000000 100%);
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				z-index: 10;
+				font-family: 'Segoe UI', sans-serif;
+			}
+			#mainMenu h1 {
+				font-size: 4em;
+				margin-bottom: 1em;
+				color: #2f4f2f;
+				text-shadow: 2px 2px #ffffff99;
+			}
+			.button-container {
+				display: flex;
+				gap: 1em;
+			}
+			#mainMenu button {
+				padding: 1em 2em;
+				font-size: 1.2em;
+				background-color: #ff4f4f;
+				color: white;
+				border: none;
+				border-radius: 10px;
+				cursor: pointer;
+				transition: background-color 0.2s;
+			}
+			#mainMenu button:hover {
+				background-color: #e03e3e;
+			}
+			#mainMenu .credits {
+				padding: 1em 2em;
+				font-size: 1.2em;
+				color: white;
+			}
+			#scoreDisplay {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				color: white;
+				font-size: 24px;
+				font-family: Arial, sans-serif;
+				z-index: 100;
+				background: rgba(0, 0, 0, 0.4);
+				padding: 6px 12px;
+				border-radius: 8px;
+			}
+			#endScreen {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0, 0, 0, 0.3);
+				color: white;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				font-family: Arial, sans-serif;
+				z-index: 999;
+			} 
+			#endScreen .end-message {
+				font-size: 64px;
+				margin-bottom: 20px;
+			}
+			#endScreen button {
+				font-size: 20px;
+				padding: 10px 20px;
+				cursor: pointer;
+				border: none;
+				border-radius: 6px;
+				background-color: #fff;
+				color: #000;
+			}
 		</style>
 	</head>
 	<body>
+		<div id="endScreen" style="display: none;">
+			<div class="end-message" id="endMessage">YOU WIN!</div>
+			<button onclick="returnToMenu()">Return to Main Menu</button>
+		  </div>
+		<div id="mainMenu">
+			<img src="assets/logo.png" alt="Strawberry Hollow">
+			<div class="button-container">
+			  <button onclick="startGame('easy')">Easy</button>
+			  <button onclick="startGame('medium')">Medium</button>
+			  <button onclick="startGame('hard')">Hard</button>
+			</div>
+			<div class="credits">Game By: Chris Crawford<br>SSE 643: Advanced Graphic Interfaces</div>
+		  </div>
+		<div id="scoreDisplay" style="display: none;">Score: 0</div>
 		<script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
  		<script src="https://cdn.jsdelivr.net/npm/three@0.160.1/examples/js/controls/OrbitControls.js"></script>
  		<script src="https://cdn.jsdelivr.net/npm/three@0.160.1/examples/js/loaders/GLTFLoader.js"></script>

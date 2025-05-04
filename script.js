@@ -19,11 +19,43 @@ class GameController {
         this.collision = false;
 
         // Miscellaneous
-        this.difficulty = null;
         this.mazeLayout = null;
         this.strawberries = [];
+        this.bears = [];
         this.score = 0;
-        this.isGameOver = false;
+        this.music = null;
+    }
+
+    start(difficulty) {
+        switch(difficulty) {
+            case 'easy':
+                this.fogDistance = 40
+                this.offsetX = -5
+                this.offsetY = 10
+                this.numBears = 1
+                this.numBerries = 10
+                break;
+            case 'medium':
+                this.fogDistance = 25
+                this.offsetX = -3
+                this.offsetY = 7
+                this.numBears = 2
+                this.numBerries = 10
+                break;
+            case 'hard':
+                this.fogDistance = 15
+                this.offsetX = -2
+                this.offsetY = 5
+                this.numBears = 3
+                this.numBerries = 10
+                break;
+        }
+
+        this.initScene();
+        this.createMaze();
+        this.addPlayer();
+        this.addEnemy();
+        this.playMusic();
     }
 
     // Create scene with plane and skybox
@@ -39,8 +71,16 @@ class GameController {
         // Add AudioListener to camera
         this.camera.add(this.listener);
 
+        const audioLoader = new THREE.AudioLoader();
+        this.music = new THREE.Audio(this.listener);
+        audioLoader.load('assets/horror-spooky-piano.mp3', (buffer) => {
+            this.music.setBuffer(buffer);
+            this.music.setLoop(true);
+            this.music.setVolume(0.5);
+        })
+
         // Fog setup
-        this.scene.fog = new THREE.Fog(0xffffff, 0.0025, 40)
+        this.scene.fog = new THREE.Fog(0xffffff, 0.0025, this.fogDistance)
 
         // Lighting
         this.scene.add(new THREE.AmbientLight(0x272727, 1, 100, 50))
@@ -81,9 +121,9 @@ class GameController {
         const mazeLayout = [
             ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
             ['1','0','1','0','0','0','1','0','0','0','1','0','0','0','0','0','0','0','0','0','1'],
-            ['1','0','1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','1','1','0','1'],
+            ['1','0','1','0','1','0','1','0','1','0','1','1','1','1','1','0','1','1','1','0','1'],
             ['1','0','1','0','0','0','1','0','1','0','0','0','0','0','1','0','0','0','1','0','1'],
-            ['1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','1','1','1','1','0','1'],
+            ['1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','0','1','1','1','0','1'],
             ['1','0','0','0','1','0','0','0','1','0','1','0','0','0','1','0','0','0','1','0','1'],
             ['1','1','1','0','1','1','1','1','1','0','1','0','1','0','1','0','1','0','1','0','1'],
             ['1','0','0','0','1','0','0','0','0','0','0','0','1','0','0','0','1','0','0','0','1'],
@@ -93,11 +133,11 @@ class GameController {
             ['1','0','0','0','1','0','0','0','0','0','1','0','0','0','1','0','1','0','1','0','1'],
             ['1','0','1','1','1','0','1','1','1','0','1','1','1','0','1','0','1','1','1','1','1'],
             ['1','0','1','0','1','0','0','0','1','0','1','0','0','0','1','0','0','0','1','0','1'],
-            ['1','0','1','0','1','0','1','1','1','1','1','1','1','1','1','0','1','1','1','0','1'],
+            ['1','0','1','0','1','0','1','1','1','1','1','0','1','1','1','0','1','1','1','0','1'],
             ['1','0','1','0','0','0','1','0','0','0','0','0','0','0','0','0','1','0','0','0','1'],
-            ['1','1','1','1','1','0','1','0','1','0','1','1','1','1','1','0','1','0','1','0','1'],
+            ['1','0','1','1','1','0','1','0','1','0','1','1','1','1','1','0','1','0','1','0','1'],
             ['1','0','0','0','0','0','1','0','1','0','1','0','0','0','1','0','0','0','1','0','1'],
-            ['1','0','1','1','1','1','1','0','1','0','1','1','1','0','1','1','1','1','1','0','1'],
+            ['1','0','1','1','1','1','1','0','1','0','1','0','1','0','1','1','1','1','1','0','1'],
             ['1','0','0','0','0','0','1','0','1','0','0','0','1','0','0','0','0','0','0','0','1'],
             ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1']
         ];
@@ -246,7 +286,7 @@ class GameController {
         }
     
         // Shuffle and select N random positions
-        for (let n = 0; n < 10; n++) {
+        for (let n = 0; n < this.numBerries; n++) {
             if (walkableCells.length === 0) break;
     
             const index = Math.floor(Math.random() * walkableCells.length);
@@ -266,7 +306,7 @@ class GameController {
     // Create player
     addPlayer() {
         this.player = new Player();
-        this.cameraOffset = new THREE.Vector3(-5, 10, 0);
+        this.cameraOffset = new THREE.Vector3(this.offsetX, this.offsetY, 0);
 
         this.loader.load('models/deer/scene.gltf', (gltf) => {
             const model = gltf.scene;
@@ -292,19 +332,29 @@ class GameController {
     }
 
     addEnemy() {
-        this.enemy = new Enemy();
+        const spawnPositions = [
+            new THREE.Vector3(37.5, 0, 38),
+            new THREE.Vector3(1.5, 0, 38),
+            new THREE.Vector3(38, 0, 1.5),
+        ];
 
-        this.loader.load('models/bear/scene.gltf', (gltf) => {
-            const model = gltf.scene;
-            visitChildren(model, (el) => {
-                el.castShadow = true
-                el.receiveShadow = true  
+        for (let i = 0; i < this.numBears; i++) {
+            const position = spawnPositions[i]
+            const enemy = new Enemy(position.clone());
+
+            this.loader.load('models/bear/scene.gltf', (gltf) => {
+                const model = gltf.scene;
+                visitChildren(model, (el) => {
+                    el.castShadow = true
+                    el.receiveShadow = true  
+                })
+                model.position.copy(enemy.position);
+                model.scale.set(3, 4, 4)
+                this.scene.add(model);
+                enemy.model = model;
+                this.bears.push(enemy);
             })
-            model.position.set(37.5, 0, 38)
-            model.scale.set(3, 4, 4)
-            this.scene.add(model);
-            this.enemy.model = model;
-        })
+        }
     }
 
     detectCollision() {
@@ -325,11 +375,28 @@ class GameController {
                 if (playerBox.intersectsBox(strawberry.hitbox)) {
                     strawberry.collect();
                     this.score += 1;
+                    document.getElementById('scoreDisplay').textContent = `Score: ${this.score}`;
+
+                    // Win condition: score = 10
+                    if (this.score == 10) endGame(true);
                 }
             }
         }
 
         // Collision with enemy
+    }
+
+    // Load and play mp3 for music
+    playMusic() {
+        const audioLoader = new THREE.AudioLoader();
+        this.music = new THREE.Audio(this.listener);
+        audioLoader.load('assets/horror-spooky-piano.mp3', (buffer) => {
+            this.music.setBuffer(buffer);
+            this.music.setLoop(true);
+            this.music.setVolume(0.5);
+            this.music.play();
+        })
+        console.log(this.music.isPlaying)
     }
 
     // Render function called in main animate
@@ -348,9 +415,11 @@ class GameController {
         this.player.model.position.copy(this.player.position);
         this.playerHitbox.position.copy(this.player.position);
 
-        // Update enemy position
+        // Update enemy positions
         const delta = this.clock.getDelta();
-        this.enemy.update(delta, this.mazeLayout);
+        for (let i = 0; i < this.bears.length; i++) {
+            this.bears[i].update(delta, this.mazeLayout);
+        }
     
         // Update camera
         const cameraTarget = this.player.position.clone().add(this.cameraOffset);
@@ -438,7 +507,7 @@ class Player {
 
 class Enemy {
     constructor(startPosition = new THREE.Vector3(37.5, 0, 38)) {
-        this.position = startPosition;
+        this.position = startPosition.clone();
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.model = null;
         this.targetRotation = 0;
@@ -553,10 +622,26 @@ class Strawberry {
 }
 
 const gameController = new GameController();
-gameController.initScene();
-gameController.createMaze();
-gameController.addPlayer();
-gameController.addEnemy();
+
+// Function run when button pressed
+window.startGame = function(difficulty) {
+    // Hide HTML menu
+    document.getElementById("mainMenu").style.display = "none";
+    document.getElementById("scoreDisplay").style.display = "block";
+    gameController.start(difficulty)
+}
+
+window.endGame = function(win = true) {
+    const message = win ? 'YOU WIN!' : 'GAME OVER';
+    document.getElementById('endMessage').textContent = message;
+    document.getElementById('endScreen').style.display = 'flex';
+    document.getElementById("scoreDisplay").style.display = "none";
+};
+  
+window.returnToMenu = function() {
+    location.reload();
+};
+  
 
 function animate() {
     requestAnimationFrame(animate)
