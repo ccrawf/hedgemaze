@@ -10,6 +10,7 @@ class GameController {
         this.loader = new GLTFLoader();
         this.flickerLights = [];
         this.listener = new THREE.AudioListener();
+        this.clock = new THREE.Clock();
 
         // Hedges/Hitboxes
         this.hedgeTexture = null;
@@ -39,7 +40,7 @@ class GameController {
         this.camera.add(this.listener);
 
         // Fog setup
-        this.scene.fog = new THREE.Fog(0xffffff, 0.0025, 100)
+        this.scene.fog = new THREE.Fog(0xffffff, 0.0025, 40)
 
         // Lighting
         this.scene.add(new THREE.AmbientLight(0x272727, 1, 100, 50))
@@ -97,7 +98,7 @@ class GameController {
             ['1','1','1','1','1','0','1','0','1','0','1','1','1','1','1','0','1','0','1','0','1'],
             ['1','0','0','0','0','0','1','0','1','0','1','0','0','0','1','0','0','0','1','0','1'],
             ['1','0','1','1','1','1','1','0','1','0','1','1','1','0','1','1','1','1','1','0','1'],
-            ['1','0','0','0','0','0','1','0','1','0','0','0','1','0','0','0','0','0','0','0','0'],
+            ['1','0','0','0','0','0','1','0','1','0','0','0','1','0','0','0','0','0','0','0','1'],
             ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1']
         ];
         this.mazeLayout = mazeLayout
@@ -290,6 +291,22 @@ class GameController {
         this.scene.add(this.playerHitbox);
     }
 
+    addEnemy() {
+        this.enemy = new Enemy();
+
+        this.loader.load('models/bear/scene.gltf', (gltf) => {
+            const model = gltf.scene;
+            visitChildren(model, (el) => {
+                el.castShadow = true
+                el.receiveShadow = true  
+            })
+            model.position.set(37.5, 0, 38)
+            model.scale.set(3, 4, 4)
+            this.scene.add(model);
+            this.enemy.model = model;
+        })
+    }
+
     detectCollision() {
         const playerBox = new THREE.Box3().setFromObject(this.playerHitbox);
     
@@ -327,9 +344,13 @@ class GameController {
             this.player.position.sub(stepBack);
         }
 
-        // Set model and hitbox positions to 
+        // Set model and hitbox positions to player position
         this.player.model.position.copy(this.player.position);
         this.playerHitbox.position.copy(this.player.position);
+
+        // Update enemy position
+        const delta = this.clock.getDelta();
+        this.enemy.update(delta, this.mazeLayout);
     
         // Update camera
         const cameraTarget = this.player.position.clone().add(this.cameraOffset);
@@ -416,11 +437,94 @@ class Player {
 }
 
 class Enemy {
-    constructor() {
-        this.position = position;
-        this.velocity = velocity;
+    constructor(startPosition = new THREE.Vector3(37.5, 0, 38)) {
+        this.position = startPosition;
+        this.velocity = new THREE.Vector3(0, 0, 0);
         this.model = null;
         this.targetRotation = 0;
+
+        this.currentDirection = null;
+        this.targetTile = null;
+    }
+
+    setRandomDirection(mazeLayout) {
+        const tileX = Math.floor(this.position.x / 2);
+        const tileZ = Math.floor(this.position.z / 2);
+
+        const directions = [
+            { name: 'north', dx: 1, dz: 0 },
+            { name: 'south', dx: -1, dz: 0 },
+            { name: 'west', dx: 0, dz: -1 },
+            { name: 'east', dx: 0, dz: 1 },
+        ];
+
+        const opposites = {
+            north: 'south',
+            south: 'north',
+            east: 'west',
+            west: 'east'
+        };
+
+        // Determine valid directions by checking if surrounding tiles are 0 in mazeLayout
+        let validDirections = directions.filter(d => {
+            const newX = tileX + d.dx;
+            const newZ = tileZ + d.dz;
+            return mazeLayout[newZ]?.[newX] == 0;
+        });
+
+        // If not at dead end, don't turn around
+        if (this.currentDirection != null && validDirections.length != 1) {
+            const opposite = opposites[this.currentDirection];
+            validDirections = validDirections.filter(d => d.name !== opposite);
+        }
+
+        if (validDirections.length > 0) {
+            const dir = validDirections[Math.floor(Math.random() * validDirections.length)];
+            this.currentDirection = dir.name;
+            this.targetTile = new THREE.Vector3(
+                (tileX + dir.dx) * 2,
+                0,
+                (tileZ + dir.dz) * 2
+            );
+            this.targetRotation = Math.atan2(dir.dz, dir.dx) * -1;
+        } else {
+            this.currentDirection = null;
+            this.targetTile = null;
+        }
+    }
+
+    // Update position/velocity
+    update(delta, mazeLayout) {
+        // Initial call to setRandomDirection
+        if (!this.targetTile) {
+            this.setRandomDirection(mazeLayout);
+            return;
+        }
+        
+        const dirVec = this.targetTile.clone().sub(this.position).normalize();
+        const speed = 4; // units per second
+        this.velocity.copy(dirVec.clone().multiplyScalar(speed * delta));
+        this.position.add(this.velocity);
+
+        // Snap to tile if close enough
+        if (this.position.distanceTo(this.targetTile) < 0.1) {
+            this.position.copy(this.targetTile);
+            this.setRandomDirection(mazeLayout);
+        }
+
+        // Update model position
+        if (this.model) {
+            this.model.position.copy(this.position);
+        }
+
+        // Smooth rotation for targetRotation
+        const currentY = this.model.rotation.y;
+        const deltaY = this.targetRotation - currentY;
+
+        // Normalize to [-PI, PI]
+        const normalized = Math.atan2(Math.sin(deltaY), Math.cos(deltaY));
+
+        this.model.rotation.y += normalized * 0.2;
     }
 }
 
@@ -452,6 +556,7 @@ const gameController = new GameController();
 gameController.initScene();
 gameController.createMaze();
 gameController.addPlayer();
+gameController.addEnemy();
 
 function animate() {
     requestAnimationFrame(animate)
