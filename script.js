@@ -24,6 +24,7 @@ class GameController {
         this.bears = [];
         this.score = 0;
         this.music = null;
+        this.isGameOver = false;
     }
 
     start(difficulty) {
@@ -33,21 +34,18 @@ class GameController {
                 this.offsetX = -5
                 this.offsetY = 10
                 this.numBears = 1
-                this.numBerries = 10
                 break;
             case 'medium':
                 this.fogDistance = 25
                 this.offsetX = -3
                 this.offsetY = 7
                 this.numBears = 2
-                this.numBerries = 10
                 break;
             case 'hard':
                 this.fogDistance = 15
                 this.offsetX = -2
                 this.offsetY = 5
                 this.numBears = 3
-                this.numBerries = 10
                 break;
         }
 
@@ -286,7 +284,7 @@ class GameController {
         }
     
         // Shuffle and select N random positions
-        for (let n = 0; n < this.numBerries; n++) {
+        for (let n = 0; n < 10; n++) {
             if (walkableCells.length === 0) break;
     
             const index = Math.floor(Math.random() * walkableCells.length);
@@ -352,6 +350,13 @@ class GameController {
                 model.scale.set(3, 4, 4)
                 this.scene.add(model);
                 enemy.model = model;
+                
+                // Add hitbox
+                enemy.hitbox = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.5, 2, 1.5),
+                    new THREE.MeshBasicMaterial({ visible: false })
+                );
+                this.scene.add(enemy.hitbox)
                 this.bears.push(enemy);
             })
         }
@@ -378,12 +383,33 @@ class GameController {
                     document.getElementById('scoreDisplay').textContent = `Score: ${this.score}`;
 
                     // Win condition: score = 10
-                    if (this.score == 10) endGame(true);
+                    if (this.score == 10) {
+                        this.isGameOver = true;
+                        endGame(true);
+                    }
                 }
             }
         }
 
         // Collision with enemy
+        for (const bear of this.bears) {
+            const bearBox = new THREE.Box3().setFromObject(bear.hitbox);
+            if (playerBox.intersectsBox(bearBox)) {
+                // Play sound effect
+                const audioLoader = new THREE.AudioLoader();
+                this.sound = new THREE.Audio(this.listener);
+                audioLoader.load('assets/bearRoar.wav', (buffer) => {
+                    this.sound.setBuffer(buffer);
+                    this.sound.setVolume(0.5);
+                    if (!this.isGameOver) this.sound.play();
+                    this.isGameOver = true;
+                })
+
+                // End game as lose condition
+                endGame(false);
+                return;
+            }
+        }
     }
 
     // Load and play mp3 for music
@@ -396,7 +422,6 @@ class GameController {
             this.music.setVolume(0.5);
             this.music.play();
         })
-        console.log(this.music.isPlaying)
     }
 
     // Render function called in main animate
@@ -404,27 +429,32 @@ class GameController {
         // Check for collisions
         this.detectCollision();
     
-        if (!this.collision) this.player.updatePosition();
-        else {
-            // Step back slightly along reverse velocity direction
-            const stepBack = this.player.velocity.clone().normalize().multiplyScalar(0.02); // Tweak scalar as needed
-            this.player.position.sub(stepBack);
-        }
+        // If game running, update player/enemy positions and camera
+        if (!this.isGameOver) {
+            // Update player position
+            if (!this.collision) this.player.updatePosition();
+            else {
+                // Step back slightly along reverse velocity direction
+                const stepBack = this.player.velocity.clone().normalize().multiplyScalar(0.02); // Tweak scalar as needed
+                this.player.position.sub(stepBack);
+            }
 
-        // Set model and hitbox positions to player position
-        this.player.model.position.copy(this.player.position);
-        this.playerHitbox.position.copy(this.player.position);
+            // Set model and hitbox positions to player position
+            this.player.model.position.copy(this.player.position);
+            this.playerHitbox.position.copy(this.player.position);
 
-        // Update enemy positions
-        const delta = this.clock.getDelta();
-        for (let i = 0; i < this.bears.length; i++) {
-            this.bears[i].update(delta, this.mazeLayout);
+            // Update enemy positions
+            const delta = this.clock.getDelta();
+            for (let i = 0; i < this.bears.length; i++) {
+                this.bears[i].update(delta, this.mazeLayout);
+                this.bears[i].hitbox.position.copy(this.bears[i].position);
+            }
+        
+            // Update camera
+            const cameraTarget = this.player.position.clone().add(this.cameraOffset);
+            this.camera.position.lerp(cameraTarget, 0.1);
+            this.camera.lookAt(this.player.position);
         }
-    
-        // Update camera
-        const cameraTarget = this.player.position.clone().add(this.cameraOffset);
-        this.camera.position.lerp(cameraTarget, 0.1);
-        this.camera.lookAt(this.player.position);
     
         this.animateFlicker();
         this.renderer.render(this.scene, this.camera);
@@ -511,6 +541,7 @@ class Enemy {
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.model = null;
         this.targetRotation = 0;
+        this.hitbox = null;
 
         this.currentDirection = null;
         this.targetTile = null;
