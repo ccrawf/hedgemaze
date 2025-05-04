@@ -1,32 +1,32 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
+// Class for GameController - initializes scene, controls game logic related to scene
 class GameController {
     constructor() {
-        // Scene
+        // Scene creation
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.loader = new GLTFLoader();
         this.flickerLights = [];
-        this.listener = new THREE.AudioListener();
-        this.clock = new THREE.Clock();
+        this.listener = new THREE.AudioListener();        
 
         // Hedges/Hitboxes
         this.hedgeTexture = null;
         this.playerHitbox = null;
         this.hedgeBoxes = [];
         this.collision = false;
+        this.clock = new THREE.Clock();
 
-        // Miscellaneous
-        this.mazeLayout = null;
+        // Other arrays/score
+        this.mazeLayout = [];
         this.strawberries = [];
         this.bears = [];
         this.score = 0;
-        this.music = null;
-        this.isGameOver = false;
     }
 
+    // Sets values based on difficulty, calls functions to initialize the game
     start(difficulty) {
         switch(difficulty) {
             case 'easy':
@@ -54,6 +54,7 @@ class GameController {
         this.addPlayer();
         this.addEnemy();
         this.playMusic();
+        this.startTimer();
     }
 
     // Create scene with plane and skybox
@@ -68,14 +69,6 @@ class GameController {
 
         // Add AudioListener to camera
         this.camera.add(this.listener);
-
-        const audioLoader = new THREE.AudioLoader();
-        this.music = new THREE.Audio(this.listener);
-        audioLoader.load('assets/horror-spooky-piano.mp3', (buffer) => {
-            this.music.setBuffer(buffer);
-            this.music.setLoop(true);
-            this.music.setVolume(0.5);
-        })
 
         // Fog setup
         this.scene.fog = new THREE.Fog(0xffffff, 0.0025, this.fogDistance)
@@ -120,7 +113,7 @@ class GameController {
             ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
             ['1','0','1','0','0','0','1','0','0','0','1','0','0','0','0','0','0','0','0','0','1'],
             ['1','0','1','0','1','0','1','0','1','0','1','1','1','1','1','0','1','1','1','0','1'],
-            ['1','0','1','0','0','0','1','0','1','0','0','0','0','0','1','0','0','0','1','0','1'],
+            ['1','0','0','0','0','0','1','0','1','0','0','0','0','0','1','0','0','0','1','0','1'],
             ['1','0','1','1','1','0','1','0','1','1','1','1','1','0','1','0','1','1','1','0','1'],
             ['1','0','0','0','1','0','0','0','1','0','1','0','0','0','1','0','0','0','1','0','1'],
             ['1','1','1','0','1','1','1','1','1','0','1','0','1','0','1','0','1','0','1','0','1'],
@@ -164,6 +157,7 @@ class GameController {
         this.spawnStrawberries()
     }
 
+    // For loop to build each lantern
     addLanterns(grid) {
         for (let i = 0; i < grid.length; i++) {
             const position = new THREE.Vector3(
@@ -176,6 +170,7 @@ class GameController {
 
     // Function to create new lantern object
     buildLantern(position, rotation) {
+        // Load model
         this.loader.load('models/wooden_lantern/scene.gltf', (loadedObject) => {
             const lantern = loadedObject.scene;
             visitChildren(lantern, (el) => {
@@ -183,7 +178,7 @@ class GameController {
                 el.receiveShadow = true
             })
             
-            // Set attributes of lantern
+            // Set physical attributes of lantern
             lantern.position.set(position.x, position.y, position.z)
             lantern.scale.set(0.5,0.5,0.5)
             lantern.rotateY(rotation)
@@ -194,14 +189,14 @@ class GameController {
             light.castShadow = true;
             light.shadow.bias = -0.005;
 
-            // Add light object to array
+            // Add light object to array, add lantern to scene
             lantern.add(light);
             this.flickerLights.push(light);
             this.scene.add(lantern)
         })
     }
 
-    // Function to animate flicker effects in 
+    // Function to animate flicker effects in lanterns
     animateFlicker() {
         this.flickerLights.forEach(light => {
             const variation = 2 * 0.1 * Math.sin(performance.now() * 0.005 + Math.random() * 5);
@@ -262,10 +257,9 @@ class GameController {
             this.scene.add(model);
             berry.model = model;
 
-            // Create hitbox
+            // Create hitbox and add to array of strawberries
             const box = new THREE.Box3().setFromObject(model)
             berry.hitbox = box;
-
             this.strawberries.push(berry)
         })
     }
@@ -283,7 +277,7 @@ class GameController {
             }
         }
     
-        // Shuffle and select N random positions
+        // Shuffle and select 10 random positions
         for (let n = 0; n < 10; n++) {
             if (walkableCells.length === 0) break;
     
@@ -312,6 +306,8 @@ class GameController {
                 el.castShadow = true
                 el.receiveShadow = true  
             })
+
+            // Set physical attributes, add to scene, create hitbox
             model.position.set(2, 0.5, 2)
             model.scale.set(0.5, 0.5, 0.5)
             this.scene.add(model);
@@ -362,6 +358,7 @@ class GameController {
         }
     }
 
+    // Collision logic for player with hedge wall/strawberry/enemy
     detectCollision() {
         const playerBox = new THREE.Box3().setFromObject(this.playerHitbox);
     
@@ -376,7 +373,8 @@ class GameController {
 
         // Collision with strawberries
         for (const strawberry of this.strawberries) {
-            if (!strawberry.isCollected && strawberry.hitbox) {        
+            if (!strawberry.isCollected && strawberry.hitbox) {    
+                // If collision detected: collect strawberry, increase score, check for win    
                 if (playerBox.intersectsBox(strawberry.hitbox)) {
                     strawberry.collect();
                     this.score += 1;
@@ -385,6 +383,7 @@ class GameController {
                     // Win condition: score = 10
                     if (this.score == 10) {
                         this.isGameOver = true;
+                        clearInterval(this.timerInterval);
                         endGame(true);
                     }
                 }
@@ -401,8 +400,10 @@ class GameController {
                 audioLoader.load('assets/bearRoar.wav', (buffer) => {
                     this.sound.setBuffer(buffer);
                     this.sound.setVolume(0.5);
+                    // Conditional to avoid sound playing multiple times
                     if (!this.isGameOver) this.sound.play();
                     this.isGameOver = true;
+                    clearInterval(this.timerInterval);
                 })
 
                 // End game as lose condition
@@ -422,6 +423,32 @@ class GameController {
             this.music.setVolume(0.5);
             this.music.play();
         })
+    }
+
+    // Begin timer
+    startTimer() {
+        this.startTime = null;
+        this.elapsedTime = 0;
+        this.timerInterval = null;
+
+        this.startTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            const now = Date.now();
+            this.elapsedTime = Math.floor((now - this.startTime) / 1000);
+            this.updateTimeDisplay();
+        }, 1000);
+    }
+
+    // Function to continuously update timer
+    updateTimeDisplay() {
+        // Convert elapsed time to h/mm/ss
+        const hours = Math.floor(this.elapsedTime / 3600);
+        const minutes = Math.floor((this.elapsedTime % 3600) / 60);
+        const seconds = this.elapsedTime % 60;
+
+        // Covert to string and update HTML element
+        const time = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('timeDisplay').textContent = `Time: ${time}`;
     }
 
     // Render function called in main animate
@@ -462,11 +489,11 @@ class GameController {
 
 }
 
+// Player class: handles player movement and controls
 class Player {
     constructor(startPosition = new THREE.Vector3(2, 0.5, 2)) {
         this.position = startPosition;
         this.velocity = new THREE.Vector3(0, 0, 0);
-        // this.cameraMode = cameraMode;
 
         this.moveDirection = {
             forward: false,
@@ -535,6 +562,7 @@ class Player {
 
 }
 
+// Enemy class: handles movement AI
 class Enemy {
     constructor(startPosition = new THREE.Vector3(37.5, 0, 38)) {
         this.position = startPosition.clone();
@@ -628,6 +656,7 @@ class Enemy {
     }
 }
 
+// Strawberry class: handles logic for player collision with strawberry
 class Strawberry {
     constructor(position, listener) {
         this.position = position;
@@ -654,24 +683,36 @@ class Strawberry {
 
 const gameController = new GameController();
 
-// Function run when button pressed
+// Function run when difficulty chosen
 window.startGame = function(difficulty) {
     // Hide HTML menu
     document.getElementById("mainMenu").style.display = "none";
     document.getElementById("scoreDisplay").style.display = "block";
+    document.getElementById("timeDisplay").style.display = "block";
     gameController.start(difficulty)
 }
 
+// Function run after win/lose condition met
 window.endGame = function(win = true) {
     const message = win ? 'YOU WIN!' : 'GAME OVER';
     document.getElementById('endMessage').textContent = message;
     document.getElementById('endScreen').style.display = 'flex';
     document.getElementById("scoreDisplay").style.display = "none";
+    document.getElementById("timeDisplay").style.display = "none";
 };
   
+// Reload page after pressing Return To Menu button after game ends
 window.returnToMenu = function() {
     location.reload();
 };
+
+// Open/close instructions
+window.howToPlay = function() {
+    document.getElementById('instructions').style.display = 'block';
+}
+window.closeInstructions = function() {
+    document.getElementById('instructions').style.display = 'none';
+}
   
 
 function animate() {
